@@ -206,6 +206,7 @@
     <span>Namaz reminders (notification)</span>
     <button class="toggle" id="notifyToggle"></button>
   </div>
+  <div class="status" id="notifyStatus" style="margin-top:-10px;"></div>
 
   <div class="section-title">Aaj ke Namaz Timings</div>
   <div class="prayers" id="prayersBox"></div>
@@ -398,24 +399,51 @@
     toggle.className = 'toggle' + (state.notifyOn ? ' on' : '');
   }
 
-  document.getElementById('notifyToggle').addEventListener('click', async () => {
-    if (!state.notifyOn) {
+  function showNotifyStatus(msg) {
+    const el = document.getElementById('notifyStatus');
+    if (el) el.textContent = msg;
+  }
+
+  function reportInitialPermission() {
+    if (!('Notification' in window)) {
+      showNotifyStatus('Ye browser notifications support nahi karta.');
+      return;
+    }
+    showNotifyStatus('Current permission: ' + Notification.permission);
+  }
+
+  document.getElementById('notifyToggle').addEventListener('click', () => {
+    try {
       if (!('Notification' in window)) {
-        alert('Ye browser notifications support nahi karta.');
+        showNotifyStatus('Ye browser notifications support nahi karta.');
         return;
       }
-      const perm = await Notification.requestPermission();
-      if (perm === 'granted') {
-        state.notifyOn = true;
-        new Notification('Namaz Tracker', { body: 'Reminders on ho gaye hain. App khula rakhein taake time par notification aaye.' });
-      } else {
-        alert('Notification permission allow karein taake reminders mil sakein.');
+      if (Notification.permission === 'granted') {
+        state.notifyOn = !state.notifyOn;
+        saveState();
+        updateToggleUI();
+        showNotifyStatus(state.notifyOn ? 'Reminders on hain.' : 'Reminders off kar diye.');
+        return;
       }
-    } else {
-      state.notifyOn = false;
+      if (Notification.permission === 'denied') {
+        showNotifyStatus('Permission pehle block ho chuki hai. Address bar ke icon se site permissions mein Notifications ko Allow karein.');
+        return;
+      }
+      showNotifyStatus('Permission maang rahe hain...');
+      Notification.requestPermission().then(perm => {
+        showNotifyStatus('Result: ' + perm);
+        if (perm === 'granted') {
+          state.notifyOn = true;
+          saveState();
+          updateToggleUI();
+          new Notification('Namaz Tracker', { body: 'Reminders on ho gaye hain.' });
+        }
+      }).catch(err => {
+        showNotifyStatus('Error: ' + err.message);
+      });
+    } catch (e) {
+      showNotifyStatus('Error: ' + e.message);
     }
-    saveState();
-    updateToggleUI();
   });
 
   function checkPrayerNotifications() {
@@ -444,6 +472,7 @@
   document.getElementById('cityInput').value = state.city;
   ensureToday();
   updateToggleUI();
+  reportInitialPermission();
   renderHabits();
   renderStats();
   fetchPrayerTimes();
